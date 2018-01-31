@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
@@ -86,6 +87,14 @@ class HMC(TraceKernel):
         self._reset()
 
     def sample(self, trace):
+
+        # TODO biject zs from constrained to unconstrained spaces and propagate in unconstrained space
+        bs = {name: biject_to(node['fn'].support) for name, node in trace.iter_stochastic_nodes()}
+        for b in bs.values():
+            assert isinstance(b, torch.distributions.transforms.Transform)
+            assert b.bijetive
+            assert b.domain is constraints.real
+
         z = {name: node['value'] for name, node in trace.iter_stochastic_nodes()}
         r = {name: pyro.sample('r_{}_t={}'.format(name, self._t), self._r_dist[name]) for name in z}
         z_new, r_new = velocity_verlet(z, r, self._potential_energy, self.step_size, self.num_steps)
